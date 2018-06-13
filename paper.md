@@ -397,7 +397,7 @@ Note that since the database states are persistent, we can calculate deltas over
      (app-f/v* n '())))
 ```
 
-# Appendix C: RDF Store With Incremental Indexes
+# Appendix C: An RDF Store With Incremental Indexes
 
 ```
 (define-syntax project
