@@ -477,7 +477,7 @@ Note that since the database states are persistent, we can calculate deltas over
 (define (triple-nolo delta s p o)
   (let ((mkstrm (lambda (var accessor key)
                   (let* ((get-incrementals (lambda () (latest-incrementals accessor key)))
-                        (initial-indexes (get-incrementals)))
+                         (initial-indexes (get-incrementals)))
                     (let stream ((indexes initial-indexes)
                                  (ref '()) (next-ref initial-indexes))
                       (if (equal? indexes ref)
