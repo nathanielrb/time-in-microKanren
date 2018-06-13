@@ -10,11 +10,13 @@ abstract:
 
 When using logical or relational programming to model or interact with stateful resources, it is convenient to have a way to reason about time. Adding a temporal primitive to the miniKanren family of languages and adapting the interleaving search to account for the concepts of 'now' (simultaneity) and 'later' allows us to build tools for temporal reasoning that turn out to integrate quite well with the basic methods of relational programming. In addition to providing a way of controlling simultaneity and goal construction in miniKanren programs, they can be used to construct specific time-aware accessors to stateful data structures that leverage miniKanren's interleaving search.
 
-In the first two sections we show how such a system might be implemented, and sketch out some ideas on how it could be extended to support a full linear temporal logic. For clarity, we use µKanren^[Jason Hemann Daniel P. Friedman. µKanren: A Minimal Functional Core for Relational Programming.] and in particular, the original implementation^[https://github.com/jasonhemann/microKanren] which has the advantage of representing immature streams by procedures, leaving us free to use Scheme promises for time. In what follows, we assume a familiarity with its implementation, and only note modifications to the original code. The full code is presented in Appendix A.
+In the first two sections we show how such a system might be implemented, and sketch out some ideas on how it can be extended to support a full linear temporal logic. For clarity, we use µKanren^[Jason Hemann, Daniel P. Friedman. µKanren: A Minimal Functional Core for Relational Programming.] and in particular the original implementation^[https://github.com/jasonhemann/microKanren] which has the advantage of representing immature streams by procedures, leaving us free to use Scheme promises for time. In what follows, we assume a familiarity with its implementation, and only note modifications to the original code. The full code is presented in the Appendixes.
 
 # Time in µKanren
 
 µKanren defines two types of streams, mature and immature. A third type, delayed streams, is introduced to represent goals that are delayed until a later point in time. We can represent delayed streams by Scheme promises, and construct them using a single temporal primitive `next`. (In a miniKanren where promises are used for immature streams, a custom record type can be used.)
+
+\clearpage
 
 ```
 (define-syntax next
@@ -117,8 +119,6 @@ The shunt-right mechanism turns out to have interesting properties for interleav
 
 
 # Temporal Relational Programming
-
-[in progress]
 
 Linear temporal logics are generally defined in terms of two fundamental modal operators, Next and Until, that are used to define a larger set of operators for conveniently reasoning about time. We can use the `next` primitive to recover several of these operators in our temporal µKanren. We will not develop a complete system of temporal relational programming, but rather provide some notes on possible implementations and suggest directions that might be interestingly pursued.
 
