@@ -17,11 +17,11 @@
 
 (define (alwayso* g*)
   (let ((g (g*)))
-    (conj g (next (always* g*))))))
+    (conj g (next (alwayso* g*))))))
 
 (define-syntax alwayso
   (syntax-rules ()
-    ((_ g) (until* (lambda () g)))))
+    ((_ g) (alwayso* (lambda () g)))))
 
 (define (as-long-aso* g* h*)
   (let ((g (g*)) (h (h*)))
@@ -40,7 +40,7 @@
 
 (define-syntax eventuallyo
   (syntax-rules ()
-    ((_ g) (eventually* (lambda () g)))))
+    ((_ g) (eventuallyo* (lambda () g)))))
 
 (define-syntax untilo
   (syntax-rules ()

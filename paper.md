@@ -7,12 +7,11 @@ abstract: By adding a temporal primitive to µKanren and adapting its interleavi
 
 # Introduction
 
-
 When using logical programming to model or interact with stateful resources or systems, it is convenient to have a way to reason about time. Temporal logic, and in particular linear temporal logic, has been formalized as a modal extension to predicate logic, and a number of implementations have been proposed as extensions to logical languages such as Prolog.
 
 Adding a temporal primitive to the miniKanren family of languages and adapting the interleaving search to account for the concepts of 'now' (simultaneity) and 'later' allows us to build tools for temporal reasoning that turn out to integrate quite well with the basic methods of relational programming. In addition to providing a way of controlling simultaneity and goal construction in miniKanren programs, they can be used to construct time-aware accessors to stateful data structures leveraging miniKanren's interleaving search.
 
-In the first two sections we show how such a system can be implemented, and sketch out some ideas on how it might be extended to support a more complete linear temporal logic. In the final section, we turn to a real-world application in the domain of distributed systems and linked data. To keep the exposition simple, we use µKanren^[Jason Hemann, Daniel P. Friedman. µKanren: A Minimal Functional Core for Relational Programming.] and in particular the original implementation^[https://github.com/jasonhemann/microKanren] which has the advantage of using procedures to represent immature streams, leaving us free to use Scheme promises for time. In what follows, we assume a familiarity with its implementation, and only note modifications to the original code. The full code is presented in the Appendixes.
+In the first two sections we show how such a system can be implemented, and sketch out some ideas on how it might be extended to support a more complete linear temporal logic. In the final section, we turn to a real-world application in the domain of distributed systems and linked data. To keep the exposition simple, we use µKanren^[Jason Hemann, Daniel P. Friedman. µKanren: A Minimal Functional Core for Relational Programming.] and in particular the original implementation^[https://github.com/jasonhemann/microKanren] which has the advantage of using procedures to represent immature streams, leaving us free to use Scheme promises for time. In what follows, we assume a familiarity with its implementation, and only note modifications to the original code. The full code is presented in the Appendixes.^[Code and examples at https://github.com/nathanielrb/temporal-microKanren]
 
 # Time in µKanren
 
@@ -127,11 +126,11 @@ Most temporal operators need to be defined recursively. When doing this, it is e
 ```
 (define (precedeso* g* h*)
   (let ((g (g*)) (h (h*)))
-    (disj h (conj g (next (precedes* g* h*))))))
+    (disj h (conj g (next (precedeso* g* h*))))))
 
 (define-syntax precedeso
   (syntax-rules ()
-    ((_ g h) (precedes* (lambda () g) (lambda () h)))))
+    ((_ g h) (precedeso* (lambda () g) (lambda () h)))))
 ```
 
 Translating another basic operator, Always (`G`), reveals one of the pitfalls of mapping temporal logic to relational programming. Our first impulse is to define it analogously to `until`.
@@ -139,11 +138,11 @@ Translating another basic operator, Always (`G`), reveals one of the pitfalls of
 ```
 (define (alwayso* g*)
   (let ((g (g*)))
-    (conj g (next (always* g*))))))
+    (conj g (next (alwayso* g*))))))
 
 (define-syntax alwayso
   (syntax-rules ()
-    ((_ g) (until* (lambda () g)))))
+    ((_ g) (alwayso* (lambda () g)))))
 ```
 
 A little experimentation, however, shows how this definition is problematic. A goal constructed with `alwayso` will return a promise so long as the goal it encloses holds, and the empty stream as soon as it fails. While this behavior can be useful for a program that only wants to verify whether a state still holds, `alwayso` will never construct a mature stream of solutions, since clearly the goal will never have been true *forever*, at least not in linear time.
@@ -168,11 +167,11 @@ The Eventually (`F`) operator also has many useful applications, but presents a 
 ```
 (define (eventuallyo* g*)
   (let ((g (g*)))
-    (disj g (next (eventually* g*)))))
+    (disj g (next (eventuallyo* g*)))))
 
 (define-syntax eventuallyo
   (syntax-rules ()
-    ((_ g) (eventually* (lambda () g)))))
+    ((_ g) (eventuallyo* (lambda () g)))))
 ```
 
 We can use it to define a strong Until.
@@ -180,7 +179,7 @@ We can use it to define a strong Until.
 ```
 (define-syntax untilo
   (syntax-rules ()
-    ((_ g h) (conj (precedes g h) (eventually h)))))
+    ((_ g h) (conj (precedeso g h) (eventuallyo h)))))
 ```
 
 
@@ -260,7 +259,7 @@ The following example shows how `triple-nolo` is used. To make clear what is goi
 ;; => (((+ +) <O1>) ((+ +) <M>) ((+ +) <O3>) . #<promise>)
 ```
 
-Note that since the database states are persistent, we can calculate deltas over any two states. Keeping track of a stream of states and adding an index on time will therefore give us a truly time-traveling database.
+Since the database states are persistent, we can calculate deltas over any two states. Keeping track of a stream of states and indexing them on time will therefore give us a truly time-traveling database.
 
 
 
