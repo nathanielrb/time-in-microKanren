@@ -5,37 +5,43 @@
 (load "temporal-microKanren.scm")
 (load "miniKanren-wrappers.scm")
 
-(define (until* g* h*)
-  (let ((g (g*))
-	(h (h*)))
-  (disj h
-	(conj g
-	      (next (until* g* h*))))))
+(define (precedeso* g* h*)
+  (let ((g (g*)) (h (h*)))
+    (disj h
+	  (conj g
+		(next (precedeso* g* h*))))))
 
-(define-syntax until
+(define-syntax precedeso
   (syntax-rules ()
-    ((_ g h) (until* (lambda () g) (lambda () h)))))
+    ((_ g h) (precedeso* (lambda () g) (lambda () h)))))
 
-(define (as-long-as* g* h*)
-  (let ((g (g*))
-	(h (h*)))
+(define (alwayso* g*)
+  (let ((g (g*)))
+    (conj g (next (always* g*))))))
+
+(define-syntax alwayso
+  (syntax-rules ()
+    ((_ g) (until* (lambda () g)))))
+
+(define (as-long-aso* g* h*)
+  (let ((g (g*)) (h (h*)))
     (lambda (s/c)
       (let (($ (g s/c)))
 	(if (null? $) mzero
-	    (bind $ (disj h (next (as-long-as* g* h*)))))))))
+	    (bind $ (disj h (next (as-long-aso* g* h*)))))))))
 
 (define-syntax as-long-as
   (syntax-rules ()
-    ((_ g h) (as-long-as* (lambda () g) (lambda () h)))))
+    ((_ g h) (as-long-aso* (lambda () g) (lambda () h)))))
 
-(define (eventually* g*)
+(define (eventuallyo* g*)
   (let ((g (g*)))
-    (disj g (next (eventually* g*)))))
+    (disj g (next (eventuallyo* g*)))))
 
-(define-syntax eventually
+(define-syntax eventuallyo
   (syntax-rules ()
     ((_ g) (eventually* (lambda () g)))))
 
-(define-syntax precedes
+(define-syntax untilo
   (syntax-rules ()
-    ((_ g h) (conj (until g h) (eventually h)))))
+    ((_ g h) (conj (precedeso g h) (eventuallyo h)))))
