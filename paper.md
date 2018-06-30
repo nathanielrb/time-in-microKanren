@@ -2,21 +2,21 @@
 title: Temporal Logic, µKanren, and a Time-Traveling RDF Database
 author:
 - Nathaniel Rudavsky-Brody
-abstract: 
+abstract: By adding a temporal primitive to µKanren and adapting its interleaving search to account for simultaneity in linear time, we show how a system of temporal relational programming can be implemented. This system is then applied to a practical problem in distributed systems and linked data.
 ---
 
 # Introduction
 
 
-When using logical or relational programming to model or interact with stateful resources, it is convenient to have a way to reason about time. Adding a temporal primitive to the miniKanren family of languages and adapting the interleaving search to account for the concepts of 'now' (simultaneity) and 'later' allows us to build tools for temporal reasoning that turn out to integrate quite well with the basic methods of relational programming. In addition to providing a way of controlling simultaneity and goal construction in miniKanren programs, they can be used to construct specific time-aware accessors to stateful data structures that leverage miniKanren's interleaving search.
+When using logical programming to model or interact with stateful resources or systems, it is convenient to have a way to reason about time. Temporal logic, and in particular linear temporal logic, has been formalized as a modal extension to predicate logic, and a number of implementations have been proposed as extensions to logical languages such as Prolog.
 
-In the first two sections we show how such a system might be implemented, and sketch out some ideas on how it can be extended to support a full linear temporal logic. For clarity, we use µKanren^[Jason Hemann, Daniel P. Friedman. µKanren: A Minimal Functional Core for Relational Programming.] and in particular the original implementation^[https://github.com/jasonhemann/microKanren] which has the advantage of representing immature streams by procedures, leaving us free to use Scheme promises for time. In what follows, we assume a familiarity with its implementation, and only note modifications to the original code. The full code is presented in the Appendixes.
+Adding a temporal primitive to the miniKanren family of languages and adapting the interleaving search to account for the concepts of 'now' (simultaneity) and 'later' allows us to build tools for temporal reasoning that turn out to integrate quite well with the basic methods of relational programming. In addition to providing a way of controlling simultaneity and goal construction in miniKanren programs, they can be used to construct time-aware accessors to stateful data structures leveraging miniKanren's interleaving search.
+
+In the first two sections we show how such a system can be implemented, and sketch out some ideas on how it might be extended to support a more complete linear temporal logic. In the final section, we turn to a real-world application in the domain of distributed systems and linked data. To keep the exposition simple, we use µKanren^[Jason Hemann, Daniel P. Friedman. µKanren: A Minimal Functional Core for Relational Programming.] and in particular the original implementation^[https://github.com/jasonhemann/microKanren] which has the advantage of using procedures to represent immature streams, leaving us free to use Scheme promises for time. In what follows, we assume a familiarity with its implementation, and only note modifications to the original code. The full code is presented in the Appendixes.
 
 # Time in µKanren
 
-µKanren defines two types of streams, mature and immature. A third type, delayed streams, is introduced to represent goals that are delayed until a later point in time. We can represent delayed streams by Scheme promises, and construct them using a single temporal primitive `next`. (In a miniKanren where promises are used for immature streams, a custom record type can be used.)
-
-\clearpage
+µKanren defines two types of streams, mature (represented as a pair of a state and a stream) and immature (represented as a lambda expression). A third type, delayed streams, is introduced to represent goals that are delayed until a later point in time. We can represent delayed streams by Scheme promises, and construct them using a single temporal primitive `next`.
 
 ```
 (define-syntax next
@@ -24,16 +24,16 @@ In the first two sections we show how such a system might be implemented, and sk
     ((_ g) (lambda (s/c) (delay (g s/c)))))) 
 ```
 
-A complex program might have many levels of delays, representing different future points in time. It is important that the temporal order of these goals be preserved during interleaving search, both with regards to the ordering of solutions and also to guaranty that a goal (which might refer to a stateful resource) is constructed at the right time. We accomplish this by adapting the interleaving search so that promises are shunted right, and all promises at the same nested level are recombined. This is done by adding two cases to the definition of `mplus`.
+A complex program might have many levels of delays representing different future points in time. It is important that the temporal order of these goals be preserved during interleaving search, both with regards to the ordering of solutions and also to guaranty that a goal (which might refer to a stateful resource) is constructed at the right time. We accomplish this by adapting the interleaving search so that promises are shunted right and all promises at the same nested level are recombined together. This is done by adding two cases to the definition of `mplus`.
 
 ```
 (define (mplus $1 $2)
   (cond
     ((null? $1) $2)
     ((procedure? $1) (lambda () (mplus $2 ($1))))
-    ((and (promise? $1) (promise? $2)) 
+    ((and (promise? $1) (promise? $2))          ; recombine
      (delay (mplus (force $1) (force $2))))
-    ((promise? $1) (mplus $2 $1))
+    ((promise? $1) (mplus $2 $1))    	        ; shunt right
     (else (cons (car $1) (mplus (cdr $1) $2)))))
 ```
 
@@ -56,7 +56,7 @@ A complex program might have many levels of delays, representing different futur
      (else (mplus (g (car $)) (bind (cdr $) g)))))
 ```
 
-Finally, we define a few convenience functions for accessing delayed streams.
+The resulting 53 lines of code are the functional core of our temporal µKanren. To keep the subsequent code simple, however, we also define a few convenience functions for accessing delayed streams.
 
 ```
 (use srfi-1)
@@ -72,7 +72,7 @@ Finally, we define a few convenience functions for accessing delayed streams.
     (and p (force p))))
 ```
 
-Now we are ready for a simple example that demonstrates the internals of this resulting temporal µKanren.
+We can see its internal workings through a simple example.
 
 ```
 (define *db* 1)
@@ -91,7 +91,7 @@ Now we are ready for a simple example that demonstrates the internals of this re
 ;; => ((((#(0) . 2)) . 1))
 ```
 
-The shunt-right mechanism turns out to have interesting properties for interleaving search even without referring to a stateful resource, for instance in ordering and grouping solutions, as the following contrived example shows. To keep the code simple, we use the miniKanren wrappers from the original paper, extended to handle delayed streams as shown in Appendix B.
+The shunt-right mechanism turns out to have interesting properties for interleaving search, even without referring to a stateful resource, for instance in ordering and grouping solutions as the following contrived example shows. Here and in what follows, will use the miniKanren wrappers from the original paper, likewise extended to handle delayed streams.^[https://github.com/nathanielrb/time-in-microKanren/blob/master/miniKanren-wrappers.scm]
 
 ```
 (define (inco x)
@@ -118,87 +118,105 @@ The shunt-right mechanism turns out to have interesting properties for interleav
 ```
 
 
-# Temporal Relational Programming
+# Towards a Temporal Relational Programming
 
-Linear temporal logics are generally defined in terms of two fundamental modal operators, Next and Until, that are used to define a larger set of operators for conveniently reasoning about time. We can use the `next` primitive to recover several of these operators in our temporal µKanren. We will not develop a complete system of temporal relational programming, but rather provide some notes on possible implementations and suggest directions that might be interestingly pursued.
+Linear temporal logic extends predicate logic with temporal modal operators referring to linear time. Two operators, Next (`X`) and Until (`U`), are generally defined as primitives and then used to construct a larger set of operators for conveniently reasoning about time. Several of these operators can be usefully recovered in temporal µKanren using the `next` primitive. We will not develop a formally complete system here, but rather provide some heuristic examples to suggest how such a system might developed.
 
-Other than Next, most of the temporal operators need to be defined recursively, and it is essential to control when the goal is constructed. For the µKanren implementation that is our starting point here, we can do this by simply wrapping goals in a lambda expression. The definition of `until`, which stipulates that a goal `g` holds at least until a second goal `h` holds, shows how this can be done.
+Most temporal operators need to be defined recursively. When doing this, it is essential to control when the goal is constructed, since the goal might refer to a stateful resource. For temporal µKanren we can do this by wrapping goals in a lambda expression which are evaluated at the appropriate time. The definition of `precedeso`, derived from Weak Until (`W`) and which stipulates that a goal `g` holds at least until a second goal `h` holds, shows how this is done.
 
 ```
-(define (until* g* h*)
+(define (precedeso* g* h*)
   (let ((g (g*)) (h (h*)))
-    (disj h (conj g (next (until* g* h*))))))
+    (disj h (conj g (next (precedes* g* h*))))))
 
-(define-syntax until
+(define-syntax precedeso
   (syntax-rules ()
-    ((_ g h) (until* (lambda () g) (lambda () h)))))
+    ((_ g h) (precedes* (lambda () g) (lambda () h)))))
 ```
 
-Implementing another basic operator, Always, reveals one of the pitfalls of mapping temporal logic to µKanren. Our first impulse is to define it analogously to `until`.
+Translating another basic operator, Always (`G`), reveals one of the pitfalls of mapping temporal logic to relational programming. Our first impulse is to define it analogously to `until`.
 
 ```
-(define (always* g*)
+(define (alwayso* g*)
   (let ((g (g*)))
     (conj g (next (always* g*))))))
 
-(define-syntax always
+(define-syntax alwayso
   (syntax-rules ()
     ((_ g) (until* (lambda () g)))))
 ```
 
-A little experimentation, however, shows how this definition is problematic. A goal constructed with `always` will return a promise so long as the goal it encloses holds, and the empty stream as soon as it fails. While this behavior can be useful for a program that only wants to verify that a state still holds, `always` will never construct a mature stream of solutions, since clearly the goal will never have been true forever.
+A little experimentation, however, shows how this definition is problematic. A goal constructed with `alwayso` will return a promise so long as the goal it encloses holds, and the empty stream as soon as it fails. While this behavior can be useful for a program that only wants to verify whether a state still holds, `alwayso` will never construct a mature stream of solutions, since clearly the goal will never have been true *forever*, at least not in linear time.
 
-There are two ways of getting around this kind of problem. One is to modify the definition of `next` in such a way as to allow for an `eot` (end-of-time) accessor that essentially cuts off the forward recursion of delayed promises. Another simpler approach is to define the weaker and impure `as-long-as`, the first of a series of 'guarded' goal-constructors.
+There are two ways of getting around this problem. One is to modify the definition of `next` in such a way as to allow for an `eot` (end-of-time) accessor that would essentially cut off the forward recursion of delayed promises. Another approach is to define the weaker and impure `as-long-aso`, which constructs a stream of solutions to the goal `h` that continues as long as the goal `g` still holds. This technique of writing 'guarded' goal constructors is reminiscent of the implementation of cuts in miniKanren.
 
 ```
-(define (as-long-as* g* h*)
+(define (as-long-aso* g* h*)
   (let ((g (g*)) (h (h*)))
     (lambda (s/c)
       (let (($ (g s/c)))
         (if (null? $) mzero
-            (bind $ (disj h (next (as-long-as* g* h*)))))))))
+            (bind $ (disj h (next (as-long-aso* g* h*)))))))))
 
-(define-syntax as-long-as
+(define-syntax as-long-aso
   (syntax-rules ()
-    ((_ g h) (as-long-as* (lambda () g) (lambda () h)))))
+    ((_ g h) (as-long-aso* (lambda () g) (lambda () h)))))
 ```
 
-The Eventually operator is also very useful, but presents a similar caveat regarding infinite time. Depending on the application, a guarded definition might be more appropriate. Here is a definition that will be useful in many contexts.
+The Eventually (`F`) operator also has many useful applications, but presents a similar caveat regarding infinite time. Depending on the application, a guarded definition might be more appropriate, but the following definition will still be useful in many contexts.
 
 ```
-(define (eventually* g*)
+(define (eventuallyo* g*)
   (let ((g (g*)))
     (disj g (next (eventually* g*)))))
 
-(define-syntax eventually
+(define-syntax eventuallyo
   (syntax-rules ()
     ((_ g) (eventually* (lambda () g)))))
 ```
 
-We can use it to define a version of a 'strong' Precedes.
+We can use it to define a strong Until.
 
 ```
-(define-syntax precedes
+(define-syntax untilo
   (syntax-rules ()
-    ((_ g h) (conj (until g h) (eventually h)))))
-
+    ((_ g h) (conj (precedes g h) (eventually h)))))
 ```
+
+
 
 # Calculating Deltas With Incremental Search
 
-Now we turn to a practical application of temporal µKanren, seeing how it can be used to implement a simple data store with temporally-aware incremental search.
+Now we turn to a practical application, seeing how temporal µKanren can be used to implement a simple data store with temporally-aware incremental search.
 
-The motivation is as follows. In distributed systems such as a microservice architecture, we often want to send push updates based on *deltas*, or entries that have been  added to or removed from the database. In practice, this often means having a service that indiscriminately pushes all deltas to all interested subscribers, in which case it is the responsibility of each subscriber to filter the deltas and determine which, if any, are relevant to its own operations.
+The motivation is as follows. In distributed systems such as a microservice architecture, we often want to send push updates based on *deltas*, or entries that have been  added to or removed from the database. In practice, this often means having a service that indiscriminately pushes all deltas to interested subscribers;  it is then the responsibility of each subscriber to filter the deltas and determine which, if any, are relevant to its own operations.
 
-If we can calculate deltas to specific queries, however, this whole process can be refined. Here we see how an RDF database (triple store)^[Though RDF actually deals with quads (triple plus a graph), for simplicity we will only deal with triples here.] can be implemented using temporal µKanren as its query language, that calculates deltas. By using the `next` constructor and a simple system of incremental indexes, we can store the final search positions for a query. Running a query will return both the current results and a delayed stream that when advanced will continue searching at the previous search-tree's leaves. Therefore, advancing the delayed stream after the database has been updated will return solutions that have been added to or subtracted from the solution set.
+If we can calculate deltas to specific queries, however, this whole process can be greatly refined. Here we describe how an RDF database (triple store) can be implemented using temporal µKanren as its query language, that calculates deltas. By using the `next` constructor and a simple system of incremental indexes, we can store the final search positions for a query. Running a query will return both the current results and a delayed stream that when advanced will continue searching at the previous search-tree's leaves. Therefore, advancing the delayed stream after the database has been updated will return solutions that have been added to, or subtracted from the solution set. The full code is presented in Appendix B.
 
-A triple store can be implemented using three indexes for a triple `s p o`: `spo`, `pos`, and `osp`. Here we want to know *incremental indexes*: for a given `s`, we need a list of the available `p`'s in a form that can be easily compared to future `p`'s to determine if new keys have been added. We use hash array mapped tries^[<https://github.com/ijp/pfds/blob/master/hamts.sls>] (persistent hash maps^[http://wiki.call-cc.org/eggref/4/persistent-hash-map] in Chicken) that allow us to persistently store successive states of the database through path copying.
+An RDF database stores semantic facts, or triples,^[Here we will only consider triples, though triple stores actually store quads, with the addition of the *graph*.] made up of a subject, predicate and object:
 
-Since these hamts do not accumulate their indexes in a easily comparable way, we keep separate incremental indexes for each index level, storing the incremental indexes as simple `cons` lists along with a map for simple checking.  Our database is therefore defined as a set of six incremental indexes (`s`, `sp`, `p`, `po`, `o`, `os`) plus the `spo` index for full triples. Adding a triple `<s> <p> <o>` to the database is a matter of `cons`ing each element to the appropriate incrementals lists, and adding a truthy value (here `#t`, though this could also be a more meaningful identifier or timestamp) to the full `spo` index. When deleting a triple, we leave the indexes, but update the triple's value in `spo` to `#f`. (Instead of keeping a null incrementals index for `s`, we overload the `s` index.) 
+```
+<http://ex.org/people/1> <http://xmlns.com/foaf/0.1/name> "John"
+```
 
-The main accessor is the recursive goal constructor `triple-nolo` ('now or later') that descends recursively through the incremental indexes one level at a time, constructing an immature stream with the current indexes and returning the last search positions in a delayed stream. A dynamic parameter keeps track of the current database state. The full code is presented in Appendix C.
+A minimalist triple store can be implemented using three indexes allowing groups of triples matching a query pattern to be retrieved : `spo`, `pos`, and `osp`, where `s` is the subject URI, `p` the predicate URI, and `o` the object URI or literal. Here, however, we want to know *incremental indexes:* for a given `s`, we need the indexed `p`'s in a form that can be easily compared to future `p`'s to determine whether new keys have been added. We keep separate incremental indexes for each index level, storing the incrementals as simple `cons` lists along with a map for quick existence checking. For each index we use a hash array mapped trie^[<https://github.com/ijp/pfds/blob/master/hamts.sls>] (persistent hash maps^[http://wiki.call-cc.org/eggref/4/persistent-hash-map] in Chicken) that allows for persistently storing successive states of the database through path copying. 
 
-The following example shows how `triple-nolo` is used. Here we keep track of the individual deltas for each triple goal, though in practice we usually want to know only if the solution was added (all `+`s) or removed (at least one `-`).
+Our database is therefore defined as a set of seven incremental indexes (null, `s`, `sp`, `p`, `po`, `o`, `os`) plus the `spo` index for full triples. Adding a triple `<A> <B> <C>` to the database is a matter of `cons`ing each element to the appropriate incrementals lists and adding a truthy value (here `#t`, though this could also be a more meaningful identifier or timestamp) to the full `spo` index. When deleting a triple, we leave the indexes, but update the triple's value in `spo` to `#f`. 
+
+```
+<ø   [ #f => (<A> ...) ]
+<s   [ <A> => (<B> ...) ] >
+<sp  [ (<A> <B>) => (<C> ...) ] >
+<p   [ <B> => (<C> ...) ] >
+<po  [ (<B> <C>) => (<A> ...) ] >
+<o   [ <C> => (<A> ...) ] >
+<os  [ (<C> <A>) => (<B> ...) ] >
+<spo [ (<A> <B> <C>) => #t ] >
+```
+
+The main accessor is the goal constructor `triple-nolo` ('now or later') that descends recursively through the incremental indexes one level at a time, constructing an immature stream with the current indexes and returning the last search positions in a delayed stream. A dynamic parameter keeps track of the current database state.
+
+The following example shows how `triple-nolo` is used. To make clear what is going on, we keep track of the individual deltas for each triple goal, though in practice we usually want to know only if the solution was added (all `+`s) or removed (at least one `-`).
 
 ```
 (define db0 (empty-db))
@@ -242,9 +260,7 @@ The following example shows how `triple-nolo` is used. Here we keep track of the
 ;; => (((+ +) <O1>) ((+ +) <M>) ((+ +) <O3>) . #<promise>)
 ```
 
-Note that since the database states are persistent, we can calculate deltas over any two states. Keeping track of a stream of states and adding an index on time will give us a truly time-traveling database.
-
-
+Note that since the database states are persistent, we can calculate deltas over any two states. Keeping track of a stream of states and adding an index on time will therefore give us a truly time-traveling database.
 
 
 
@@ -289,115 +305,37 @@ Note that since the database states are persistent, we can calculate deltas over
 (define (disj g1 g2) (lambda (s/c) (mplus (g1 s/c) (g2 s/c))))
 (define (conj g1 g2) (lambda (s/c) (bind (g1 s/c) g2)))
 
-```
+(define (mplus $1 $2)
+  (cond
+    ((null? $1) $2)
+    ((procedure? $1) (lambda () (mplus $2 ($1))))
+    ((and (promise? $1) (promise? $2)) 
+     (delay (mplus (force $1) (force $2))))
+    ((promise? $1) (mplus $2 $1))
+    (else (cons (car $1) (mplus (cdr $1) $2)))))
 
-# Appendix B: miniKanren Wrappers
-
-```
-(define-syntax Zzz
-  (syntax-rules ()
-    ((_ g) (lambda (s/c) (lambda () (g s/c))))))
-
-(define-syntax conj+
-  (syntax-rules ()
-    ((_ g) g)
-    ((_ g0 g ...) (conj g0 (conj+ g ...)))))
-
-(define-syntax disj+
-  (syntax-rules ()
-    ((_ g) g)
-    ((_ g0 g ...) (disj g0 (disj+ g ...)))))
-
-(define-syntax fresh
-  (syntax-rules ()
-    ((_ () g0 g ...) (conj+ g0 g ...))
-    ((_ (x0 x ...) g0 g ...)
-     (call/fresh
-      (lambda (x0)
-        (fresh (x ...) g0 g ...))))))
-
-(define-syntax conde
-  (syntax-rules ()
-    ((_ (g0 g ...) ...) (disj+ (conj+ g0 g ...) ...))))
-
-(define-syntax run
-  (syntax-rules ()
-    ((_ n (x ...) g0 g ...)
-     (let r ((k n) ($ (take n (call/goal (fresh (x ...) g0 g ...)))))
-       (cond ((null? $) '())
-             ((promise? $) (delay (r (- k 1) (take k (force $)))))
-             (else (cons (reify-1st (car $))
-                         (r (- k 1) (cdr $)))))))))
-
-(define-syntax run*
-  (syntax-rules ()
-    ((_ (x ...) g0 g ...)
-     (let r (($ (take-all (call/goal (fresh (x ...) g0 g ...)))))
-       (cond ((null? $) '())
-             ((promise? $) (delay (r (take-all (force $)))))
-             (else (cons (reify-1st (car $))
-                         (r (cdr $)))))))))
-
-(define empty-state '(() . 0))
-
-(define (call/goal g) (g empty-state))
-
-(define (pull $)
-  (cond ((procedure? $) (pull ($)))
-        ((promise? $) $)
-        (else $)))
-
-(define (take-all $)
-  (let (($ (pull $)))
-    (cond ((null? $) '())
-          ((promise? $) $)
-          (else (cons (car $) (take-all (cdr $)))))))
-
-(define (take n $)
-  (if (zero? n) '()
-    (let (($ (pull $)))
+(define (forward g)
+  (lambda (s/c)
+    (let rec (($ (g s/c)))
       (cond ((null? $) '())
-            ((promise? $) $)
-            (else (cons (car $) (take (- n 1) (cdr $))))))))
+	    ((promise? $) (force $))
+            ((procedure? $) (lambda () (rec ($))))
+	    (else (cons (car $) (rec (cdr $))))))))
 
-(define (reify-1st s/c)
-  (let ((v (walk* (var 0) (car s/c))))
-    (walk* v (reify-s v '()))))
+(define (bind $ g)
+   (cond
+     ((null? $) mzero)
+     ((procedure? $) (lambda () (bind ($) g)))
+     ((promise? $) (delay (bind (force $) (forward g))))
+     (else (mplus (g (car $)) (bind (cdr $) g)))))
 
-(define (walk* v s)
-  (let ((v (walk v s)))
-    (cond
-      ((var? v) v)
-      ((pair? v) (cons (walk* (car v) s)
-                   (walk* (cdr v) s)))
-      (else  v))))
-
-(define (reify-s v s)
-  (let ((v (walk v s)))
-    (cond
-      ((var? v)
-       (let  ((n (reify-name (length s))))
-         (cons `(,v . ,n) s)))
-      ((pair? v) (reify-s (cdr v) (reify-s (car v) s)))
-      (else s))))
-
-(define (reify-name n)
-  (string->symbol
-    (string-append "_" "." (number->string n))))
-
-(define (fresh/nf n f)
-  (letrec
-    ((app-f/v*
-       (lambda (n v*)
-         (cond
-           ((zero? n) (apply f (reverse v*)))
-           (else (call/fresh
-                   (lambda (x)
-                     (app-f/v* (- n 1) (cons x v*)))))))))
-     (app-f/v* n '())))
+(define-syntax next
+  (syntax-rules ()
+    ((_ g) (lambda (s/c) (delay (g s/c)))))) 
 ```
 
-# Appendix C: An RDF Store With Incremental Indexes
+
+# Appendix B: RDF Store With Incremental Search
 
 ```
 (define-syntax project
@@ -416,7 +354,17 @@ Note that since the database states are persistent, we can calculate deltas over
 
 (define (empty-db)
   (apply make-db
-         (make-list 7 (persistent-map))))
+         (make-list 8 (persistent-map))))
+
+(define latest-db (make-parameter (empty-db)))
+
+(define (latest-incrementals accessor key)
+  (incrementals-list
+   (map-ref (accessor (latest-db)) key (empty-incrementals))))
+
+(define (latest-triple s p o)
+  (map-ref (db-spo (latest-db))
+           (list s p o)))
 
 (define (update-incrementals table key val)
   (let ((incrementals (map-ref table key (empty-incrementals))))
@@ -430,18 +378,9 @@ Note that since the database states are persistent, we can calculate deltas over
 (define (update-triple table triple val)
   (map-add table triple val))
 
-(define latest-db (make-parameter (empty-db)))
-
-(define (latest-incrementals accessor key)
-  (incrementals-list
-   (map-ref (accessor (latest-db)) key (empty-incrementals))))
-
-(define (latest-triple s p o)
-  (map-ref (db-spo (latest-db))
-           (list s p o)))
-
 (define (update-triples DB triples val)
   (let loop ((triples triples)
+             (i/null (db-null DB))
              (i/s (db-s DB))
              (i/sp (db-sp DB))
              (i/p (db-p DB))
@@ -450,13 +389,12 @@ Note that since the database states are persistent, we can calculate deltas over
              (i/os (db-os DB))
              (i/spo (db-spo DB)))
     (if (null? triples)
-        (make-db i/s i/sp i/p i/po i/o i/os i/spo)
+        (make-db i/null i/s i/sp i/p i/po i/o i/os i/spo)
         (match (car triples)
           ((s p o)
            (loop (cdr triples)
-                 (update-incrementals
-                  (update-incrementals i/s #f s) 
-                  s p)
+                 (update-incrementals i/null #f s) 
+                 (update-incrementals i/s s p)
                  (update-incrementals i/sp (list s p) o)
                  (update-incrementals i/p p o)
                  (update-incrementals i/po (list p o) s)
@@ -476,9 +414,10 @@ Note that since the database states are persistent, we can calculate deltas over
 
 (define (triple-nolo delta s p o)
   (let ((mkstrm (lambda (var accessor key)
-                  (let* ((get-incrementals (lambda () (latest-incrementals accessor key)))
-                         (initial-indexes (get-incrementals)))
-                    (let stream ((indexes initial-indexes)
+                  (let* ((get-incrementals (lambda ()
+                                            (latest-incrementals accessor key)))
+                        (initial-indexes (get-incrementals)))
+                    (let stream ((indexes initial-indexes) 
                                  (ref '()) (next-ref initial-indexes))
                       (if (equal? indexes ref)
                           (next
@@ -488,9 +427,9 @@ Note that since the database states are persistent, we can calculate deltas over
                            (conj (== var (car indexes))
                                  (project (delta s p o) (triple-nolo delta s p o)))
                            (stream (cdr indexes) ref next-ref))))))))
-    (cond ((and (var? s) (var? p) (var? o)) (mkstrm s db-s #f))
+    (cond ((and (var? s) (var? p) (var? o)) (mkstrm s db-null #f))
           ((and (var? s) (var? p))          (mkstrm s db-o o))
-          ((and (var? s) (var? o))          (mkstrm o  db-p p))
+          ((and (var? s) (var? o))          (mkstrm o db-p p))
           ((and (var? p) (var? o))          (mkstrm p db-s s))
           ((var? s)                         (mkstrm s db-po (list p o)))
           ((var? p)                         (mkstrm p db-os (list o s)))
@@ -499,6 +438,6 @@ Note that since the database states are persistent, we can calculate deltas over
            (let leaf ((ref #f))
              (let ((v (latest-triple s p o)))
                (cond ((eq? v ref) (next (leaf v)))
-                     (v (disj (== delta '+) (next (leaf v))))
-                     (else (disj (== delta '-) (next (leaf v)))))))))))
+                     (v           (disj (== delta '+) (next (leaf v))))
+                     (else        (disj (== delta '-) (next (leaf v)))))))))))
 ```
