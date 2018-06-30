@@ -15,7 +15,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Database
-(define-record db s sp p po o os spo)
+(define-record db null s sp p po o os spo)
 
 (define-record incrementals map list)
 
@@ -24,7 +24,7 @@
 
 (define (empty-db)
   (apply make-db
-	 (make-list 7 (persistent-map))))
+	 (make-list 8 (persistent-map))))
 
 (define (update-incrementals table key val)
   (let ((incrementals (map-ref table key (empty-incrementals))))
@@ -50,6 +50,7 @@
 
 (define (update-triples DB triples val)
   (let loop ((triples triples)
+	     (i/null (db-null DB))
 	     (i/s (db-s DB))
 	     (i/sp (db-sp DB))
 	     (i/p (db-p DB))
@@ -58,13 +59,12 @@
 	     (i/os (db-os DB))
 	     (i/spo (db-spo DB)))
     (if (null? triples)
-	(make-db i/s i/sp i/p i/po i/o i/os i/spo)
+	(make-db i/null i/s i/sp i/p i/po i/o i/os i/spo)
 	(match (car triples)
 	  ((s p o)
 	   (loop (cdr triples)
-		 (update-incrementals
-		  (update-incrementals i/s #f s) 
-		  s p)
+		 (update-incrementals i/null #f s) 
+		 (update-incrementals i/s s p)
 		 (update-incrementals i/sp (list s p) o)
 		 (update-incrementals i/p p o)
 		 (update-incrementals i/po (list p o) s)
@@ -94,7 +94,7 @@
 			   (conj (== var (car indexes))
 				 (project (s p o) (tripleo s p o)))
 			   (stream (cdr indexes)))))))))
-    (cond ((and (var? s) (var? p) (var? o)) (mkstrm s db-s #f))
+    (cond ((and (var? s) (var? p) (var? o)) (mkstrm s db-null #f))
 	  ((and (var? s) (var? p))          (mkstrm s db-o o))
 	  ((and (var? s) (var? o))          (mkstrm o db-p p))
 	  ((and (var? p) (var? o))          (mkstrm p db-s s))
@@ -118,9 +118,9 @@
 			   (conj (== var (car indexes))
 				 (project (delta s p o) (triple-nolo delta s p o)))
 			   (stream (cdr indexes) ref next-ref))))))))
-    (cond ((and (var? s) (var? p) (var? o)) (mkstrm s db-s #f))
+    (cond ((and (var? s) (var? p) (var? o)) (mkstrm s db-null #f))
 	  ((and (var? s) (var? p))          (mkstrm s db-o o))
-	  ((and (var? s) (var? o))          (mkstrm o  db-p p))
+	  ((and (var? s) (var? o))          (mkstrm o db-p p))
 	  ((and (var? p) (var? o))          (mkstrm p db-s s))
 	  ((var? s)                         (mkstrm s db-po (list p o)))
 	  ((var? p)                         (mkstrm p db-os (list o s)))
