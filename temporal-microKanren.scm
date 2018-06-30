@@ -69,6 +69,8 @@
   (syntax-rules ()
     ((_ g) (lambda (s/c) (delay (g s/c)))))) 
 
+;; accessors
+
 (use srfi-1)
 
 (define (promised $)
@@ -80,24 +82,3 @@
 (define (advance $)
   (let ((p (promised $)))
     (and p (force p))))
-
-(define (until* g* h*)
-  (let ((g (g*))
-	(h (h*)))
-  (disj h
-	(conj g
-	      (next (until* g* h*))))))
-
-(define-syntax until
-  (syntax-rules ()
-    ((_ g h) (until* (lambda () g) (lambda () h)))))
-
-
-;; never releases hold... how to make this relational?
-(define (always* g*)
-  (let ((g (g*)))
-    (conj g (next (always* g*)))))
-
-(define-syntax always
-  (syntax-rules ()
-    ((_ g) (always* (lambda () g)))))
