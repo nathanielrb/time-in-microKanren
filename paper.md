@@ -272,7 +272,7 @@ Clearly this is only a beginning, and as the above examples suggest, what consti
 
 Now we turn to a practical application, and see how temporal µKanren can be used to implement a simple data store with temporally-aware incremental search. We proceed by describing the implementation first, and then presenting the full code at the end of the section.
 
-The motivation is as follows. In distributed systems such as a microservice architecture  we often want to send push updates based on *deltas*, or entries that have been  added to or removed from the database. In practice, this often means having a service that indiscriminately pushes all deltas to interested subscribers;  it is then the responsibility of each subscriber to filter the deltas and determine which, if any, are relevant to its own operations.
+The motivation is as follows. In distributed systems such as a microservice architecture (for the specific context, see \cite{versteden2016state} and \cite{aad2018}) we often want to send push updates based on *deltas*, or entries that have been  added to or removed from the database. In practice, this often means having a service that indiscriminately pushes all deltas to interested subscribers;  it is then the responsibility of each subscriber to filter the deltas and determine which, if any, are relevant to its own operations.
 
 If we can calculate deltas to specific queries, however, this whole process can be greatly refined. Here we describe how an RDF database (triple store) can be implemented using temporal µKanren as its query language, that calculates deltas. By using the `next` constructor and a simple system of incremental indexes, we can store the final search positions for a query. Running a query will return both the current results and a delayed stream that when advanced will continue searching at the previous search-tree's leaves. Therefore, advancing the delayed stream after the database has been updated will return solutions that have been added to, or subtracted from the solution set.
 
@@ -478,7 +478,7 @@ Finally, here is the full code for the data store.
                      (else        (disj (== delta '-) (next (leaf v)))))))))))
 ```
 
-Though this reduced example is clearly far from a production-ready system, we hope we have demonstrated the one of the practical uses of temporal relational programming. Indeed, we intend to pursue these tools in an industrial setting, and the full implementation will be a laboratory for other practical applications of miniKanren, such as drawing on \cite{Byrd:2012:MLU:2661103.2661105} to compile SPARQL to miniKanren and using search ordering as explored in \cite{swords2013rkanren} to aid query optimization.
+Though this reduced example is clearly far from a production-ready system, we hope we have demonstrated the one of the practical uses of temporal relational programming. Indeed, we intend to pursue these tools in an industrial setting, and the full implementation will be a laboratory for other practical applications of miniKanren, such as drawing on \cite{Byrd:2012:MLU:2661103.2661105} to compile SPARQL to miniKanren and using search ordering as explored in \cite{swords2013rkanren} to aid with query optimization.
 
 
 
@@ -486,7 +486,7 @@ Though this reduced example is clearly far from a production-ready system, we ho
 
 # Appendix: miniKanren Wrappers
 
-Here are the miniKanren control operators described in \cite{microkanren}, adapted for delayed streams. Unlike the original paper, we do not use `Zzz` to wrap goals in `conj+` and `disj+` since this makes it difficult of control the goal construction time at different levels of nested delays, a problem when referring to stateful resources. This difficulty should be addressed in future implementations of temporal µKanren.
+Here we adapt the miniKanren control operators described in \cite{microkanren} for delayed streams. Unlike the original paper, we do not use `Zzz` to wrap goals in `conj+` and `disj+` since this makes it difficult of control the goal construction time at different levels of nested delays, a problem when referring to stateful resources. This difficulty should be addressed in future implementations of temporal µKanren.
 
 
 ```
