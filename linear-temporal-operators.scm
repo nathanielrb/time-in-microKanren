@@ -17,7 +17,7 @@
 
 (define (always* g*)
   (let ((g (g*)))
-    (conj g (next (always* g*))))))
+    (conj g (next (always* g*)))))
 
 (define-syntax always
   (syntax-rules ()
