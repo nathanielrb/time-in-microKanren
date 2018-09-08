@@ -92,7 +92,8 @@
 		      (if (null? indexes) (lambda (s/c) mzero)
 			  (disj
 			   (conj (== var (car indexes))
-				 (project (s p o) (tripleo s p o)))
+				 (project (s p o)
+                                   (tripleo s p o)))
 			   (stream (cdr indexes)))))))))
     (cond ((and (var? s) (var? p) (var? o)) (mkstrm s db-null #f))
 	  ((and (var? s) (var? p))          (mkstrm s db-o o))
