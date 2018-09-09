@@ -117,7 +117,7 @@
 			     (stream vals next-ref vals)))
 			  (disj
 			   (conj (== var (car indexes))
-				 (project (delta s p o) (triple-nolo delta s p o)))
+				 (project (s p o) (triple-nolo delta s p o)))
 			   (stream (cdr indexes) ref next-ref))))))))
     (cond ((and (var? s) (var? p) (var? o)) (mkstrm s db-null #f))
 	  ((and (var? s) (var? p))          (mkstrm s db-o o))
