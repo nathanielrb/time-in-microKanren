@@ -34,9 +34,23 @@
   (syntax-rules ()
     ((_ g h) (as-long-as* (lambda () g) (lambda () h)))))
 
+;; Naive definition
+;;
+;; (define (eventually* g*)
+;;   (let ((g (g*)))
+;;     (disj g (next (eventually* g*)))))
+
+;; (define-syntax eventually
+;;   (syntax-rules ()
+;;     ((_ g) (eventually* (lambda () g)))))
+
 (define (eventually* g*)
   (let ((g (g*)))
-    (disj g (next (eventually* g*)))))
+    (lambda (s/c)
+      (let (($ (g s/c)))
+        (if (null? $)
+	    (bind (list s/c) (next (eventually* g*)))
+	    $)))))
 
 (define-syntax eventually
   (syntax-rules ()
